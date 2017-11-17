@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 INVISIBLE_CHARS = [' ', '　', '\n', '\r', '\t', '\a', '\b', '\f', '\v']
 AVOIDED_CHARS = ['\\', '\0', '/', ':', '*', '?', '"', '<', '>', '|']
-FONT_EXTS = ['ttf', 'ttc', 'otf', 'otc']
+FONT_EXTS = ['.ttf', '.ttc', '.otf', '.otc', '.TTF', '.OTF']
 ALPHABET_CAPS = [chr(i) for i in range(65, 65 + 26)]
 
 
@@ -58,20 +58,22 @@ class font2img():
         self._get_font_paths()
         self._get_chars()
 
-        self.failure_txt = open(os.path.join(self.dst_dir_path, 'failure.txt'), 'a')
-
-    def __del__(self):
-        self.failure_txt.close()
+        self.log_path = os.path.join(self.dst_dir_path, 'failure.txt')
+        if os.path.isfile(self.log_path):
+            os.remove(self.log_path)
 
     def _get_font_paths(self):
         '''
         フォントパスの取得
         FONT_EXTSに含まれる拡張子のファイルを全て取得
         '''
-        self.font_paths = list()
-        for ext in FONT_EXTS:
-            tmp = glob(self.src_font_dir_path + '/*.' + ext)
-            self.font_paths.extend(tmp)
+        self.font_paths = []
+        for root, dirnames, filenames in os.walk(self.src_font_dir_path):
+            for filename in filenames:
+                ext = os.path.splitext(filename)[1]
+                if ext in FONT_EXTS:
+                    filepath = os.path.join(root, filename)
+                    self.font_paths.append(filepath)
 
     def _get_chars(self):
         '''
@@ -150,11 +152,13 @@ class font2img():
                 failure_chars.sort()
                 # 失敗したリストを書き込み．
                 # TODO: 単純に追記にしているので，うまく更新できるように
-                self.failure_txt.write('{},white,{}\n'.format(font_name, failure_chars))
+                with open(self.log_path, 'a') as f:
+                    f.write('{},white,{}\n'.format(font_name, failure_chars))
             if same_fonts_n == len(pbar_chars) - 1:
                 for dst_img_path in dst_img_paths:
                     os.remove(dst_img_path)
-                self.failure_txt.write('{},same\n'.format(font_name))
+                with open(self.log_path, 'a') as f:
+                    f.write('{},same\n'.format(font_name))
         # 最終的に，空だったディレクトリを削除
         for path in glob(self.dst_dir_path + '/*'):
             if os.path.isdir(path) and not os.listdir(path):
@@ -248,8 +252,8 @@ class font2img():
 
     def _is_same(self, prev_pil_img, cur_pil_img):
         '''
-        画像が真っ白かチェック
-        真っ白ならTrueを返す
+        2枚の画像が同じかチェック
+        同じならTrueを返す
         '''
         prev_num_img = self._pil2num(prev_pil_img)
         cur_num_img = self._pil2num(cur_pil_img)
